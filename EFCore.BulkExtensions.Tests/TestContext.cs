@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace EFCore.BulkExtensions.Tests
 {
@@ -21,6 +22,11 @@ namespace EFCore.BulkExtensions.Tests
         public DbSet<Info> Infos { get; set; }
         public DbSet<ChangeLog> ChangeLogs { get; set; }
 
+        public DbSet<Table1> Table1s { get; set; }
+        public DbSet<Table2> Table2s { get; set; }
+        public DbSet<Table3> Table3s { get; set; }
+
+
         public TestContext(DbContextOptions options) : base(options)
         {
             Database.EnsureCreated();
@@ -37,6 +43,29 @@ namespace EFCore.BulkExtensions.Tests
             modelBuilder.Entity<Document>().Property(p => p.ContentLength).HasComputedColumnSql($"(CONVERT([int], len([{nameof(Document.Content)}])))");
 
             //modelBuilder.Entity<Item>().HasQueryFilter(p => p.Description != "1234"); // For testing Global Filter
+
+            Table1And2ModelCreating(modelBuilder);
+        }
+
+        private void Table1And2ModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Table1>().ToTable("Table1", "dbo");
+            modelBuilder.Entity<Table1>().Property(x => x.Id).IsRequired().ValueGeneratedOnAdd();
+            modelBuilder.Entity<Table1>().Property(x => x.Data).HasMaxLength(500);
+            modelBuilder.Entity<Table1>().Property(x => x.RowVersion).HasColumnType("timestamp").ValueGeneratedOnAddOrUpdate();
+            modelBuilder.Entity<Table1>().HasKey(x => x.Id);
+
+            modelBuilder.Entity<Table2>().ToTable("Table2", "dbo");
+            modelBuilder.Entity<Table2>().Property(x => x.Id).IsRequired().ValueGeneratedOnAdd();
+            modelBuilder.Entity<Table2>().Property(x => x.Data).HasMaxLength(500);
+            modelBuilder.Entity<Table2>().Property(x => x.RowVersion).HasColumnType("timestamp").ValueGeneratedOnAddOrUpdate().HasConversion(new NumberToBytesConverter<ulong>());
+            modelBuilder.Entity<Table2>().HasKey(x => x.Id);
+
+            modelBuilder.Entity<Table3>().ToTable("Table3", "dbo");
+            modelBuilder.Entity<Table3>().Property(x => x.Id).IsRequired().ValueGeneratedOnAdd();
+            modelBuilder.Entity<Table3>().Property(x => x.Data).HasMaxLength(500);
+            modelBuilder.Entity<Table3>().Property(x => x.RowVersion).HasColumnType("timestamp").IsConcurrencyToken().ValueGeneratedOnAddOrUpdate();
+            modelBuilder.Entity<Table3>().HasKey(x => x.Id);
         }
     }
 
@@ -46,7 +75,7 @@ namespace EFCore.BulkExtensions.Tests
         {
             var builder = new DbContextOptionsBuilder<TestContext>();
             var databaseName = nameof(EFCoreBulkTest);
-            var connectionString = $"Server=localhost;Database={databaseName};Trusted_Connection=True;MultipleActiveResultSets=true";
+            var connectionString = $"Server=.\\Sql2016;Database={databaseName};Trusted_Connection=True;MultipleActiveResultSets=true";
             builder.UseSqlServer(connectionString); // Can NOT Test with UseInMemoryDb (Exception: Relational-specific methods can only be used when the context is using a relational)
             return builder.Options;
         }
@@ -167,5 +196,32 @@ namespace EFCore.BulkExtensions.Tests
         public string ChangedBy { get; set; } // default Column name for Property of OwnedType is OwnedType_Property ('Audit_ChangedBy')
 
         public DateTime? ChangedTime { get; set; }
+    }
+
+    public class Table1
+    {
+        public int Id { get; set; }
+
+        public string Data { get; set; }
+
+        public byte[] RowVersion { get; set; }
+    }
+
+    public class Table2
+    {
+        public int Id { get; set; }
+
+        public string Data { get; set; }
+
+        public ulong? RowVersion { get; set; }
+    }
+
+    public class Table3
+    {
+        public int Id { get; set; }
+
+        public string Data { get; set; }
+
+        public byte[] RowVersion { get; set; }
     }
 }
